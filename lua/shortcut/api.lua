@@ -1,6 +1,7 @@
 local M = {}
 local config = require("shortcut.config")
 local curl = require("plenary.curl")
+local utils = require("shortcut.utils")
 
 local function make_request(endpoint, method, body)
 	local cfg = config.get()
@@ -33,7 +34,19 @@ local function make_request(endpoint, method, body)
 		return nil, "API request failed: " .. (response.body or "Unknown error")
 	end
 
-	return vim.fn.json_decode(response.body), nil
+	-- Use vim.json.decode if available (Neovim 0.7+), fallback to vim.fn.json_decode
+	local ok, decoded
+	if vim.json and vim.json.decode then
+		ok, decoded = pcall(vim.json.decode, response.body)
+	else
+		ok, decoded = pcall(vim.fn.json_decode, response.body)
+	end
+	
+	if not ok then
+		return nil, "Failed to decode JSON response: " .. tostring(decoded)
+	end
+	
+	return decoded, nil
 end
 
 function M.get_workflows()
@@ -50,7 +63,9 @@ end
 
 function M.search_stories(query)
 	local cfg = config.get()
-	local endpoint = "/search/stories?query=" .. vim.fn.escape(query, " &") .. "&page_size=" .. cfg.default_query_limit
+	-- Properly URL encode the query parameter
+	local encoded_query = utils.url_encode(query)
+	local endpoint = "/search/stories?query=" .. encoded_query .. "&page_size=" .. cfg.default_query_limit
 	return make_request(endpoint, "GET")
 end
 

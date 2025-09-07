@@ -1,15 +1,15 @@
 if vim.fn.has("nvim-0.7.0") == 0 then
-  vim.api.nvim_err_writeln("shortcut.nvim requires at least nvim-0.7.0")
-  return
+	vim.api.nvim_err_writeln("shortcut.nvim requires at least nvim-0.7.0")
+	return
 end
 
 if vim.g.loaded_shortcut == 1 then
-  return
+	return
 end
 vim.g.loaded_shortcut = 1
 
-local shortcut = require('shortcut')
-local api = require('shortcut.api')
+local shortcut = require("shortcut")
+local api = require("shortcut.api")
 
 vim.api.nvim_create_user_command("ShortcutSearch", function(opts)
   local query = opts.args
@@ -136,3 +136,93 @@ vim.api.nvim_create_user_command("ShortcutStory", function(opts)
   vim.bo.swapfile = false
   vim.bo.filetype = "shortcut"
 end, { nargs = "?", desc = "View a Shortcut story" })
+
+-- Main UI command
+vim.api.nvim_create_user_command("Shortcut", function()
+	local has_telescope = pcall(require, "telescope")
+	if has_telescope then
+		local picker = require("shortcut.picker")
+		if picker.my_stories then
+			picker.my_stories()
+		else
+			vim.notify("Telescope integration not loaded properly", vim.log.levels.ERROR)
+		end
+	else
+		vim.notify("Telescope is required for the UI. Please install nvim-telescope/telescope.nvim", vim.log.levels.ERROR)
+	end
+end, { desc = "Open Shortcut UI" })
+
+-- Telescope-based commands
+local has_telescope = pcall(require, "telescope")
+if has_telescope then
+	local ok, picker = pcall(require, "shortcut.picker")
+	
+	if ok and picker.my_stories then
+		vim.api.nvim_create_user_command("ShortcutMyStories", function()
+			picker.my_stories()
+		end, { desc = "View my Shortcut stories" })
+
+		vim.api.nvim_create_user_command("ShortcutSearchTelescope", function(opts)
+			picker.search_stories({ query = opts.args })
+		end, { nargs = "?", desc = "Search Shortcut stories with Telescope" })
+
+		vim.api.nvim_create_user_command("ShortcutCreate", function(opts)
+			picker.create_story({ visual = opts.range > 0 })
+		end, { range = true, desc = "Create a new Shortcut story" })
+		
+		-- Debug command to test API and show all stories
+		vim.api.nvim_create_user_command("ShortcutDebug", function()
+			local api = require("shortcut.api")
+			local config = require("shortcut.config")
+			
+			if not config.is_configured() then
+				vim.notify("Shortcut not configured", vim.log.levels.ERROR)
+				return
+			end
+			
+			-- Test workflows
+			vim.notify("Testing workflows API...", vim.log.levels.INFO)
+			local workflows, workflow_err = api.get_workflows()
+			if workflow_err then
+				vim.notify("Workflow API error: " .. workflow_err, vim.log.levels.ERROR)
+			else
+				vim.notify("Workflows API works! Found " .. #workflows .. " workflows", vim.log.levels.INFO)
+			end
+			
+			-- Test stories without filters
+			vim.notify("Testing stories API without filters...", vim.log.levels.INFO)
+			local stories, stories_err = api.search_stories("")
+			if stories_err then
+				vim.notify("Stories API error: " .. stories_err, vim.log.levels.ERROR)
+			else
+				local count = stories and stories.data and #stories.data or 0
+				vim.notify("Stories API works! Found " .. count .. " stories", vim.log.levels.INFO)
+				
+				if count > 0 then
+					picker.show_stories(stories.data, { prompt_title = "Debug: All Stories" })
+				end
+			end
+		end, { desc = "Debug Shortcut API connection" })
+	end
+end
+
+-- Global keymaps (optional, users can set their own)
+vim.api.nvim_set_keymap("n", "<leader>mm", ":Shortcut<CR>", { noremap = true, silent = true, desc = "Open Shortcut UI" })
+vim.api.nvim_set_keymap(
+	"n",
+	"<leader>ms",
+	":ShortcutSearchTelescope ",
+	{ noremap = true, silent = false, desc = "Search Shortcut stories" }
+)
+vim.api.nvim_set_keymap(
+	"n",
+	"<leader>mc",
+	":ShortcutCreate<CR>",
+	{ noremap = true, silent = true, desc = "Create new Shortcut story" }
+)
+vim.api.nvim_set_keymap(
+	"v",
+	"<leader>mc",
+	":ShortcutCreate<CR>",
+	{ noremap = true, silent = true, desc = "Create story from selection" }
+)
