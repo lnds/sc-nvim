@@ -5,12 +5,11 @@ A Neovim plugin for interacting with Shortcut (formerly Clubhouse) project manag
 ## Features
 
 - Search stories
-- View workflows and their states
-- List projects
 - View story details
 - Create and update stories (API support included)
 - Add comments to stories
-
+- Copy branch name
+  
 ## Requirements
 
 - Neovim 0.7.0+
