@@ -34,7 +34,13 @@ end
 
 -- Copy to clipboard
 function M.copy_to_clipboard(text)
+	if not text then
+		vim.notify("Nothing to copy", vim.log.levels.WARN)
+		return
+	end
+	
 	vim.fn.setreg("+", text)
+	vim.fn.setreg("*", text)  -- Also set primary selection
 	vim.notify("Copied: " .. text, vim.log.levels.INFO)
 end
 
@@ -47,7 +53,7 @@ function M.format_story_display(story)
 end
 
 -- Format story details
-function M.format_story_details(story)
+function M.format_story_details(story, workflows, members)
 	local lines = {}
 	local function add_line(label, value)
 		if value and value ~= "" then
@@ -57,13 +63,36 @@ function M.format_story_details(story)
 
 	add_line("ID", story.id)
 	add_line("Type", story.story_type)
-	add_line("State", story.workflow_state_id)
-	add_line("Estimate", story.estimate and tostring(story.estimate) .. " points")
+	
+	-- Use proper state name if workflows are available
+	local state_display = story.workflow_state_id
+	if workflows then
+		state_display = M.format_workflow_state(workflows, story.workflow_state_id)
+	end
+	add_line("State", state_display)
+	
+	-- Handle estimate safely
+	if story.estimate and type(story.estimate) == "number" then
+		add_line("Estimate", tostring(story.estimate) .. " points")
+	elseif story.estimate and type(story.estimate) == "string" and story.estimate ~= "" then
+		add_line("Estimate", story.estimate .. " points")
+	end
+	
 	add_line("Created", story.created_at and story.created_at:sub(1, 10))
 	add_line("Updated", story.updated_at and story.updated_at:sub(1, 10))
 
+	-- Format owners with proper names
 	if story.owner_ids and #story.owner_ids > 0 then
-		add_line("Owners", table.concat(story.owner_ids, ", "))
+		local owners_display = M.format_owners(members, story.owner_ids)
+		add_line("Owners", owners_display)
+	else
+		add_line("Owners", "Unassigned")
+	end
+
+	-- Format requester with proper name if available
+	if story.requester_id then
+		local requester_name = M.format_member_name(members, story.requester_id)
+		add_line("Requester", requester_name)
 	end
 
 	if story.labels and #story.labels > 0 then
@@ -143,14 +172,53 @@ function M.format_workflow_state(workflows, state_id)
 		return "Unknown"
 	end
 
+	-- Handle both numeric and string state IDs
+	local target_id = tonumber(state_id) or state_id
+
 	for _, workflow in ipairs(workflows) do
-		for _, state in ipairs(workflow.states or {}) do
-			if state.id == state_id then
-				return state.name
+		if workflow.states then
+			for _, state in ipairs(workflow.states) do
+				local current_id = tonumber(state.id) or state.id
+				if current_id == target_id then
+					return state.name
+				end
 			end
 		end
 	end
-	return tostring(state_id)
+	return "State " .. tostring(state_id)
+end
+
+-- Format member name from ID
+function M.format_member_name(members, member_id)
+	if not members or not member_id then
+		return nil
+	end
+
+	-- Convert to string for comparison
+	local target_id = tostring(member_id)
+
+	for _, member in ipairs(members) do
+		if tostring(member.id) == target_id and member.profile then
+			-- Try to get the best display name
+			return member.profile.name or member.profile.username or member.profile.email_address or ("User " .. member_id)
+		end
+	end
+	return "User " .. tostring(member_id)
+end
+
+-- Format list of owner IDs to names
+function M.format_owners(members, owner_ids)
+	if not owner_ids or #owner_ids == 0 then
+		return "Unassigned"
+	end
+
+	local names = {}
+	for _, owner_id in ipairs(owner_ids) do
+		local name = M.format_member_name(members, owner_id)
+		table.insert(names, name)
+	end
+	
+	return table.concat(names, ", ")
 end
 
 -- URL encode a string

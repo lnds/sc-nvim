@@ -17,12 +17,32 @@ local config = require("shortcut.config")
 local utils = require("shortcut.utils")
 
 M.workflows = nil -- Cache workflows
+M.members = nil -- Cache members
 
 local function get_workflows()
 	if not M.workflows then
-		M.workflows = api.get_workflows()
+		local workflows, err = api.get_workflows()
+		if not err and workflows then
+			M.workflows = workflows
+		else
+			-- Return empty array if failed, don't cache the error
+			return {}
+		end
 	end
 	return M.workflows
+end
+
+local function get_members()
+	if not M.members then
+		local members, err = api.get_members()
+		if not err and members then
+			M.members = members
+		else
+			-- Return empty array if failed, don't cache the error
+			return {}
+		end
+	end
+	return M.members
 end
 
 local function make_entry(story)
@@ -42,12 +62,13 @@ local function make_entry(story)
 	return {
 		value = story,
 		branch_name = branch_name,
-		display = string.format("sc-%s %s %s", 
+		display = string.format("sc-%s %s [%s] %s", 
 			tostring(story.id or ""), 
 			estimate, 
-			utils.truncate(story.name or "Untitled", 60)
+			state_name,
+			utils.truncate(story.name or "Untitled", 50)
 		),
-		ordinal = (story.name or "") .. " " .. (story.description or "") .. " " .. tostring(story.id or ""),
+		ordinal = (story.name or "") .. " " .. (story.description or "") .. " " .. tostring(story.id or "") .. " " .. state_name,
 		description = state_name,
 	}
 end
@@ -57,16 +78,18 @@ local function create_previewer()
 		title = "Story Details",
 		define_preview = function(self, entry, status)
 			local story = entry.value
+			local workflows = get_workflows()
+			local members = get_members()
 			local lines = {}
 
 			-- Header
 			table.insert(lines, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-			table.insert(lines, "  " .. story.name)
+			table.insert(lines, "  " .. (story.name or "Untitled"))
 			table.insert(lines, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
 			table.insert(lines, "")
 
 			-- Details
-			local details = utils.format_story_details(story)
+			local details = utils.format_story_details(story, workflows, members)
 			for _, line in ipairs(details) do
 				table.insert(lines, line)
 			end
@@ -129,6 +152,8 @@ local function attach_mappings(prompt_bufnr, map, opts)
 		local selection = action_state.get_selected_entry()
 		if selection and selection.branch_name then
 			utils.copy_to_clipboard(selection.branch_name)
+		else
+			vim.notify("No branch name available for this story", vim.log.levels.WARN)
 		end
 	end)
 
@@ -136,6 +161,8 @@ local function attach_mappings(prompt_bufnr, map, opts)
 		local selection = action_state.get_selected_entry()
 		if selection and selection.branch_name then
 			utils.copy_to_clipboard(selection.branch_name)
+		else
+			vim.notify("No branch name available for this story", vim.log.levels.WARN)
 		end
 	end)
 
@@ -154,18 +181,37 @@ local function attach_mappings(prompt_bufnr, map, opts)
 		end
 	end)
 
-	-- Copy story ID
-	map("i", "<C-y>", function()
+	-- Copy story ID (changed to <C-d> to avoid conflicts)
+	map("i", "<C-d>", function()
 		local selection = action_state.get_selected_entry()
 		if selection then
 			utils.copy_to_clipboard("sc-" .. selection.value.id)
 		end
 	end)
 
-	map("n", "<C-y>", function()
+	map("n", "<C-d>", function()
 		local selection = action_state.get_selected_entry()
 		if selection then
 			utils.copy_to_clipboard("sc-" .. selection.value.id)
+		end
+	end)
+	
+	-- Alternative: Copy branch name with <C-y> as backup
+	map("i", "<C-y>", function()
+		local selection = action_state.get_selected_entry()
+		if selection and selection.branch_name then
+			utils.copy_to_clipboard(selection.branch_name)
+		else
+			vim.notify("No branch name available for this story", vim.log.levels.WARN)
+		end
+	end)
+
+	map("n", "<C-y>", function()
+		local selection = action_state.get_selected_entry()
+		if selection and selection.branch_name then
+			utils.copy_to_clipboard(selection.branch_name)
+		else
+			vim.notify("No branch name available for this story", vim.log.levels.WARN)
 		end
 	end)
 

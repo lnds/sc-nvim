@@ -91,8 +91,9 @@ The plugin will prompt for your API token (and optionally username) on first use
 Inside the Telescope picker:
 - `<CR>` - Copy branch name to clipboard
 - `<C-b>` - Copy branch name to clipboard
+- `<C-y>` - Copy branch name to clipboard (alternative)
 - `<C-o>` - Open story in browser
-- `<C-y>` - Copy story ID to clipboard
+- `<C-d>` - Copy story ID to clipboard
 - `<C-c>` - Add comment to story
 
 ### Legacy Commands

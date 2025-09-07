@@ -203,6 +203,27 @@ if has_telescope then
 				end
 			end
 		end, { desc = "Debug Shortcut API connection" })
+		
+		-- Config debug command
+		vim.api.nvim_create_user_command("ShortcutConfig", function()
+			local config = require("shortcut.config")
+			local cfg = config.get()
+			
+			vim.notify("Current config:", vim.log.levels.INFO)
+			vim.notify("  API Token: " .. (cfg.api_token and "***configured***" or "NOT SET"), vim.log.levels.INFO)
+			vim.notify("  Username: " .. (cfg.username or "NOT SET"), vim.log.levels.INFO)
+			vim.notify("  Base URL: " .. cfg.base_url, vim.log.levels.INFO)
+			
+			-- Test loading saved config
+			local saved = config.load_saved_config()
+			if saved then
+				vim.notify("Saved config found:", vim.log.levels.INFO)
+				vim.notify("  API Token: " .. (saved.api_token and "***saved***" or "NOT SAVED"), vim.log.levels.INFO)
+				vim.notify("  Username: " .. (saved.username or "NOT SAVED"), vim.log.levels.INFO)
+			else
+				vim.notify("No saved config found", vim.log.levels.WARN)
+			end
+		end, { desc = "Show Shortcut configuration" })
 	end
 end
 
